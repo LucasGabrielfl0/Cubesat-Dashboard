@@ -119,15 +119,32 @@ class MainWindow(QMainWindow):
 
         cfg_box = QHBoxLayout()
         self.port_box = QComboBox()
-        self.port_box.addItems(["COM1", "COM2", "COM3", "COM4", "COM5"])
-        self.port_box.setCurrentText("COM5")
+        self.port_box.addItems(["COM1", "COM2", "COM3", "COM4", "COM5", "COM6"])
+        self.port_box.setCurrentText("COM6")
         self.baud_box = QComboBox()
         self.baud_box.addItems(["9600", "19200", "38400", "57600", "115200", "230400", "250000"])
-        self.baud_box.setCurrentText("115200")
+        self.baud_box.setCurrentText("250000")
+
+        self.connect_button = QPushButton("Connect")
+        self.connect_button.setFixedHeight(28)
+        self.connect_button.setFixedWidth(80)
+        self.connect_button.setStyleSheet("""
+            QPushButton {
+                background-color: #007ACC;
+                color: white;
+                font-weight: bold;
+                border-radius: 4px;
+            }
+            QPushButton:hover { background-color: #005999; }
+            QPushButton:pressed { background-color: #003F73; }
+        """)
+        self.connect_button.clicked.connect(self.reconnect_serial)
+
         cfg_box.addWidget(QLabel("Port:"))
         cfg_box.addWidget(self.port_box)
         cfg_box.addWidget(QLabel("Baud:"))
         cfg_box.addWidget(self.baud_box)
+        cfg_box.addWidget(self.connect_button)
 
         self.battery = BatteryBar()
         self.battery.setFixedSize(140, 55)
@@ -264,6 +281,20 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(left_layout, stretch=3)
         main_layout.addWidget(right_container, stretch=1)
 
+    # === Serial control ===
+    def reconnect_serial(self):
+        port     = self.port_box.currentText()
+        baudrate = int(self.baud_box.currentText())
+        if self.serial_reader:
+            self.serial_reader.reconnect(port, baudrate)
+            self.connect_button.setText("Connected!")
+            QTimer.singleShot(1500, lambda: self.connect_button.setText("Connect"))
+
+    def closeEvent(self, event):
+        if self.serial_reader:
+            self.serial_reader.stop()
+        event.accept()
+
     # === Popup & Data ===
     def open_setpoint_popup(self):
         if self.setpoint_popup is None or not hasattr(self.setpoint_popup, 'isVisible'):
@@ -274,7 +305,7 @@ class MainWindow(QMainWindow):
             self.setpoint_popup.activateWindow()
 
     def on_serial_data(self, data_list):
-        if len(data_list) != 19:
+        if len(data_list) != 20:
             return
         roll, pitch, yaw = data_list[0:3]
         accx, accy, accz = data_list[3:6]
@@ -318,7 +349,7 @@ class MainWindow(QMainWindow):
             "GyroX", "GyroY", "GyroZ", "Battery", "Temperature",
             "Latitude", "Longitude", "Altitude",
             "Roll_Setpoint", "Pitch_Setpoint", "Yaw_Setpoint",
-            "Timestamp", "Validity"
+            "Timestamp", "Validity", "CRC"
         ]
         try:
             with open(path, "w", newline="") as f:
@@ -330,4 +361,3 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(1000, lambda: self.log_button.setText("Log Data"))
         except Exception as e:
             print(f"[ERROR] Saving CSV: {e}")
-

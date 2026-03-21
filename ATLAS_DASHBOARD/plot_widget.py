@@ -3,6 +3,13 @@ import pyqtgraph as pg
 import numpy as np
 
 class AxisPlot(QWidget):
+    # Y-axis ranges per axis name
+    Y_RANGES = {
+        "Roll":  (-180, 180),
+        "Pitch": (-90,   90),
+        "Yaw":   (0,    360),
+    }
+
     def __init__(self, axis_name="Axis", max_points=600):
         super().__init__()
         self.axis_name = axis_name
@@ -15,13 +22,15 @@ class AxisPlot(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
+        y_min, y_max = self.Y_RANGES.get(axis_name, (-180, 180))
+
         self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setBackground(None)  # 'k' = black
+        self.plot_widget.setBackground(None)
         self.plot_widget.showGrid(x=True, y=True, alpha=0.5)
-        self.plot_widget.setYRange(-180, 180)
+        self.plot_widget.setYRange(y_min, y_max)
         self.plot_widget.setXRange(0, self.max_points)
-        self.plot_widget.setLabel('left', axis_name)  # <-- Y-axis label
-        self.plot_widget.addLegend(offset=(10,10))    # <-- legend
+        self.plot_widget.setLabel('left', axis_name)
+        self.plot_widget.addLegend(offset=(10,10))
 
         # Current = green, Setpoint = red
         self.curve_current = self.plot_widget.plot(self.data_current, pen=pg.mkPen('g', width=2), name="Current")
