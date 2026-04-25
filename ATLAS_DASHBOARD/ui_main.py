@@ -42,19 +42,47 @@ class UnderlinedLabel(QLabel):
         painter.drawLine(x, y, x + text_rect.width(), y)
 
 
-class ValueLabel(QLabel):
-    def __init__(self, text="0.00", fixed_width=110):
-        super().__init__(text)
+class ValueLabel(QWidget):
+    """
+    Two-part numeric display: a right-aligned number column and a
+    left-aligned unit column, so the leading digit of every row lines up
+    regardless of how many digits the value has.
+      e.g.   320.00 °
+              10.00 °
+    The '3' and '1' are always in the same horizontal position.
+    """
+    # Total width matches the original ValueLabel fixed_width=110
+    NUM_WIDTH  = 74   # fits "-180.00" in Consolas 9
+    UNIT_WIDTH = 36   # fits "°/s" comfortably
+
+    def __init__(self):
+        super().__init__()
         font = QFont("Consolas", 11)
-        self.setFont(font)
-        self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.setStyleSheet("color: white; background: transparent; border: none;")
-        self.setFixedWidth(fixed_width)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._num_lbl = QLabel("   0.00")
+        self._num_lbl.setFont(font)
+        self._num_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._num_lbl.setStyleSheet("color: white; background: transparent; border: none;")
+        self._num_lbl.setFixedWidth(self.NUM_WIDTH)
+
+        self._unit_lbl = QLabel("")
+        self._unit_lbl.setFont(font)
+        self._unit_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self._unit_lbl.setStyleSheet("color: #888888; background: transparent; border: none; padding-left: 3px;")
+        self._unit_lbl.setFixedWidth(self.UNIT_WIDTH)
+
+        layout.addWidget(self._num_lbl)
+        layout.addWidget(self._unit_lbl)
+        self.setFixedWidth(self.NUM_WIDTH + self.UNIT_WIDTH)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
-    def set_value(self, value, suffix=""):
-        formatted = f"{value:8.2f}{suffix}"
-        self.setText(formatted)
+    def set_value(self, value, suffix="", decimals=2):
+        fmt = f"{{value:{8}.{decimals}f}}"
+        self._num_lbl.setText(fmt.format(value=value))
+        self._unit_lbl.setText(suffix.strip())
 
 
 class NameLabel(QLabel):
@@ -69,7 +97,7 @@ class NameLabel(QLabel):
 class FixedInfoLabel(QLabel):
     def __init__(self, text, fixed_width=130):
         super().__init__(text)
-        font = QFont("Consolas", 11)
+        font = QFont("Consolas", 9)
         self.setFont(font)
         self.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.setFixedWidth(fixed_width)
@@ -121,10 +149,6 @@ class MainWindow(QMainWindow):
         self.port_box = QComboBox()
         self.port_box.addItems(["COM1", "COM2", "COM3", "COM4", "COM5", "COM6"])
         self.port_box.setCurrentText("COM6")
-        self.baud_box = QComboBox()
-        self.baud_box.addItems(["9600", "19200", "38400", "57600", "115200", "230400", "250000"])
-        self.baud_box.setCurrentText("250000")
-
         self.connect_button = QPushButton("Connect")
         self.connect_button.setFixedHeight(28)
         self.connect_button.setFixedWidth(80)
@@ -140,10 +164,14 @@ class MainWindow(QMainWindow):
         """)
         self.connect_button.clicked.connect(self.reconnect_serial)
 
+        baud_lbl_key = QLabel("Baud:")
+        baud_lbl_key.setStyleSheet("color: #B0B0B0;")
+        baud_lbl_val = QLabel("250000")
+        baud_lbl_val.setStyleSheet("color: white; font-weight: bold;")
         cfg_box.addWidget(QLabel("Port:"))
         cfg_box.addWidget(self.port_box)
-        cfg_box.addWidget(QLabel("Baud:"))
-        cfg_box.addWidget(self.baud_box)
+        cfg_box.addWidget(baud_lbl_key)
+        cfg_box.addWidget(baud_lbl_val)
         cfg_box.addWidget(self.connect_button)
 
         self.battery = BatteryBar()
@@ -172,7 +200,6 @@ class MainWindow(QMainWindow):
         attitude_area = QHBoxLayout()
         attitude_area.setSpacing(14)
         self.value_labels = {}
-        numeric_width = 110
 
         for axis in ["Roll", "Pitch", "Yaw"]:
             frame = QFrame()
@@ -184,22 +211,24 @@ class MainWindow(QMainWindow):
             col_layout.addWidget(title)
 
             pairs = [
-                ("Setpoint:", "°"),
-                ("Angle:", "°"),
-                ("Accel:", " m/s²"),
-                ("Gyro:", " °/s"),
+                ("Angle:",    "°",    2),
+                ("Setpoint:", "°",    2),
+                ("Accel:",    "g",    3),
+                ("Gyro:",     "°/s",  2),
             ]
 
             label_dict = {}
-            for name_text, suffix in pairs:
+            for name_text, suffix, decimals in pairs:
                 row = QHBoxLayout()
+                row.setSpacing(4)
                 name_lbl = NameLabel(name_text)
-                value_lbl = ValueLabel(fixed_width=numeric_width)
+                value_lbl = ValueLabel()
+                value_lbl.set_value(0.0, suffix, decimals)
                 row.addWidget(name_lbl)
                 row.addStretch()
                 row.addWidget(value_lbl)
                 col_layout.addLayout(row)
-                label_dict[name_text[:-1]] = (value_lbl, suffix)
+                label_dict[name_text[:-1]] = (value_lbl, suffix, decimals)
 
             col_layout.addStretch()
             attitude_area.addWidget(frame)
@@ -214,22 +243,15 @@ class MainWindow(QMainWindow):
         flight_layout = QHBoxLayout(flight_frame)
         info_font = QFont("Arial", 11, QFont.Weight.Bold)
 
-        self.icon_sat = QLabel("🛰️:")
-        self.icon_sat.setFont(info_font)
-        self.icon_sat.setStyleSheet("color: white;")
-
-        self.text_sat = QLabel("ON")
-        self.text_sat.setFont(QFont("Arial", 11, QFont.Weight.Bold))
-        self.text_sat.setStyleSheet("color: #32CD32; margin-right: 10px;")
-
-        flight_layout.addWidget(self.icon_sat)
-        flight_layout.addWidget(self.text_sat)
-
-        self.flight_labels = {}
-        for label in ["Lat", "Long", "Alt"]:
-            lbl = FixedInfoLabel(f"{label}: 0.0000°" if label != "Alt" else f"{label}: 0.0 m")
-            flight_layout.addWidget(lbl)
-            self.flight_labels[label] = lbl
+        # Temperature: up to "Temperature: 100.0 °C" → Consolas 9
+        self.temp_label    = FixedInfoLabel("Temperature:  0.0 °C", fixed_width=148)
+        # Battery: up to "8.40 V" → 16 chars
+        self.battery_label = FixedInfoLabel("Battery: 0.00 V", fixed_width=112)
+        # Status: up to "255" → 11 chars
+        self.status_label  = FixedInfoLabel("Status: 0",       fixed_width=82)
+        flight_layout.addWidget(self.temp_label)
+        flight_layout.addWidget(self.battery_label)
+        flight_layout.addWidget(self.status_label)
 
         flight_layout.addStretch()
 
@@ -284,7 +306,7 @@ class MainWindow(QMainWindow):
     # === Serial control ===
     def reconnect_serial(self):
         port     = self.port_box.currentText()
-        baudrate = int(self.baud_box.currentText())
+        baudrate = 250000   # fixed
         if self.serial_reader:
             self.serial_reader.reconnect(port, baudrate)
             self.connect_button.setText("Connected!")
@@ -316,25 +338,43 @@ class MainWindow(QMainWindow):
         roll_sp, pitch_sp, yaw_sp = data_list[14:17]
         valid_flag = int(data_list[18])
 
-        self.data_history.append(data_list)
+        self.data_history.append({
+            "MsgCounter":    int(data_list[17]),
+            "Roll":          roll,
+            "Pitch":         pitch,
+            "Yaw":           yaw,
+            "Roll_SP":       roll_sp,
+            "Pitch_SP":      pitch_sp,
+            "Yaw_SP":        yaw_sp,
+            "AccX":          accx,
+            "AccY":          accy,
+            "AccZ":          accz,
+            "GyroX":         gyrox,
+            "GyroY":         gyroy,
+            "GyroZ":         gyroz,
+            "Battery":       battery,
+            "Temperature":   temp,
+            "Longitude":     lon,
+            "Latitude":      lat,
+        })
         if len(self.data_history) > 1000:
             self.data_history.pop(0)
 
         for axis, values in zip(["Roll", "Pitch", "Yaw"],
-                                [(roll_sp, roll, accx, gyrox),
-                                 (pitch_sp, pitch, accy, gyroy),
-                                 (yaw_sp, yaw, accz, gyroz)]):
-            for (key, (lbl, suffix)), val in zip(self.value_labels[axis].items(), values):
-                lbl.set_value(val, suffix)
+                                [(roll, roll_sp, accx, gyrox),
+                                 (pitch, pitch_sp, accy, gyroy),
+                                 (yaw, yaw_sp, accz, gyroz)]):
+            for (key, (lbl, suffix, decimals)), val in zip(self.value_labels[axis].items(), values):
+                lbl.set_value(val, suffix, decimals)
 
         self.cube_widget.set_attitude(roll, pitch, yaw)
         self.cube_widget.set_setpoint(roll_sp, pitch_sp, yaw_sp)
 
-        self.flight_labels["Lat"].setText(f"Lat: {lat:8.4f}°")
-        self.flight_labels["Long"].setText(f"Long: {lon:8.4f}°")
-        self.flight_labels["Alt"].setText(f"Alt: {alt:8.1f} m")
+        self.temp_label.setText(f"Temperature: {temp:5.1f} °C")
+        self.battery_label.setText(f"Battery: {battery:.2f} V")
+        self.status_label.setText(f"Status: {int(data_list[13])}")
 
-        self.battery.setValue(battery)
+        self.battery.setValue(min(100.0, max(0.0, ((battery - 6.0) / (8.40 - 6.0)) * 100.0)))
 
         self.plots["Roll"].update_plot(roll, roll_sp)
         self.plots["Pitch"].update_plot(pitch, pitch_sp)
@@ -344,18 +384,38 @@ class MainWindow(QMainWindow):
         folder = "FlightLog"
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, "Odyssey_Log.csv")
-        headers = [
-            "Roll", "Pitch", "Yaw", "AccX", "AccY", "AccZ",
-            "GyroX", "GyroY", "GyroZ", "Battery", "Temperature",
-            "Latitude", "Longitude", "Altitude",
-            "Roll_Setpoint", "Pitch_Setpoint", "Yaw_Setpoint",
-            "Timestamp", "Validity", "CRC"
+
+        # Column order and format spec for each field
+        # (header, dict_key, format_string)
+        columns = [
+            ("MsgCounter",      "MsgCounter",  "d"),        # integer
+            ("Roll",            "Roll",        ".2f"),       # x.xx °
+            ("Pitch",           "Pitch",       ".2f"),       # x.xx °
+            ("Yaw",             "Yaw",         ".2f"),       # x.xx °
+            ("Roll_Setpoint",   "Roll_SP",     ".2f"),       # x.xx °
+            ("Pitch_Setpoint",  "Pitch_SP",    ".2f"),       # x.xx °
+            ("Yaw_Setpoint",    "Yaw_SP",      ".2f"),       # x.xx °
+            ("AccX",            "AccX",        ".3f"),       # x.xxx g
+            ("AccY",            "AccY",        ".3f"),       # x.xxx g
+            ("AccZ",            "AccZ",        ".3f"),       # x.xxx g
+            ("GyroX",           "GyroX",       ".2f"),       # x.xx °/s
+            ("GyroY",           "GyroY",       ".2f"),       # x.xx °/s
+            ("GyroZ",           "GyroZ",       ".2f"),       # x.xx °/s
+            ("Battery",         "Battery",     ".2f"),       # x.xx %
+            ("Temperature",     "Temperature", ".1f"),       # x.x °C
+            ("Longitude",       "Longitude",   ".7f"),       # 7 decimal places (32-bit GPS)
+            ("Latitude",        "Latitude",    ".7f"),       # 7 decimal places (32-bit GPS)
         ]
+
+        headers = [col[0] for col in columns]
+
         try:
             with open(path, "w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
-                writer.writerows(self.data_history)
+                for sample in self.data_history:
+                    row = [format(sample[key], fmt) for _, key, fmt in columns]
+                    writer.writerow(row)
             print(f"[INFO] Saved {len(self.data_history)} samples to {path}")
             self.log_button.setText("Saved!")
             QTimer.singleShot(1000, lambda: self.log_button.setText("Log Data"))
