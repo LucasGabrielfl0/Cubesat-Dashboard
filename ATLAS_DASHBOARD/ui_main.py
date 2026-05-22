@@ -12,6 +12,7 @@ from PyQt6.QtCore import Qt, QTimer
 #
 import os
 import csv
+from collections import deque
 
 #
 from PyQt6.QtWidgets import (
@@ -20,6 +21,10 @@ from PyQt6.QtWidgets import (
     QFrame, QPushButton, QSizePolicy
 )
 
+# ===================== DEFINES ===================== #
+DATA_HISTORY_MAX = 1000      # Number of telemetry samples stored in memory / saved to CSV
+                             # At 10 Hz → 1000 samples = 100 seconds of history
+# =================================================== #
 
 class UnderlinedLabel(QLabel):
     def __init__(self, text):
@@ -43,17 +48,8 @@ class UnderlinedLabel(QLabel):
 
 
 class ValueLabel(QWidget):
-    """
-    Two-part numeric display: a right-aligned number column and a
-    left-aligned unit column, so the leading digit of every row lines up
-    regardless of how many digits the value has.
-      e.g.   320.00 °
-              10.00 °
-    The '3' and '1' are always in the same horizontal position.
-    """
-    # Total width matches the original ValueLabel fixed_width=110
-    NUM_WIDTH  = 74   # fits "-180.00" in Consolas 9
-    UNIT_WIDTH = 36   # fits "°/s" comfortably
+    NUM_WIDTH  = 74
+    UNIT_WIDTH = 36
 
     def __init__(self):
         super().__init__()
@@ -111,7 +107,7 @@ class MainWindow(QMainWindow):
         self.serial_reader = serial_reader
         self.setWindowTitle("ATLAS-GroundStation")
         self.showFullScreen()
-        self.data_history = []
+        self.data_history = deque(maxlen=DATA_HISTORY_MAX)
         self.last_validity = 1
         self.setpoint_popup = None
         self.initUI()
@@ -241,22 +237,17 @@ class MainWindow(QMainWindow):
         flight_frame.setFrameShape(QFrame.Shape.Box)
         flight_frame.setStyleSheet("background-color: #111; color: white; padding:5px;")
         flight_layout = QHBoxLayout(flight_frame)
-        info_font = QFont("Arial", 11, QFont.Weight.Bold)
 
-        # Temperature: up to "Temperature: 100.0 °C" → Consolas 9
-        self.temp_label    = FixedInfoLabel("Temperature:  0.0 °C", fixed_width=148)
-        # Battery: up to "8.40 V" → 16 chars
-        self.battery_label = FixedInfoLabel("Battery: 0.00 V", fixed_width=112)
-        # Status: up to "255" → 11 chars
-        self.status_label  = FixedInfoLabel("Status: 0",       fixed_width=82)
+        self.temp_label    = FixedInfoLabel("Temperature:  0.0 °C", fixed_width=152)
+        self.battery_label = FixedInfoLabel("Battery: 0.00 V",      fixed_width=112)
+        self.status_label  = FixedInfoLabel("Status: 0",            fixed_width=82)
         flight_layout.addWidget(self.temp_label)
         flight_layout.addWidget(self.battery_label)
         flight_layout.addWidget(self.status_label)
-
         flight_layout.addStretch()
 
         self.setpoint_button = QPushButton("Setpoints")
-        self.log_button = QPushButton("Log Data")
+        self.log_button      = QPushButton("Log Data")
         for btn in [self.setpoint_button, self.log_button]:
             btn.setFixedHeight(30)
             btn.setFixedWidth(100)
@@ -306,7 +297,7 @@ class MainWindow(QMainWindow):
     # === Serial control ===
     def reconnect_serial(self):
         port     = self.port_box.currentText()
-        baudrate = 250000   # fixed
+        baudrate = 250000
         if self.serial_reader:
             self.serial_reader.reconnect(port, baudrate)
             self.connect_button.setText("Connected!")
@@ -317,7 +308,7 @@ class MainWindow(QMainWindow):
             self.serial_reader.stop()
         event.accept()
 
-    # === Popup & Data ===
+    # === Popup ===
     def open_setpoint_popup(self):
         if self.setpoint_popup is None or not hasattr(self.setpoint_popup, 'isVisible'):
             self.setpoint_popup = SetpointPopup(serial_reader=self.serial_reader)
@@ -326,96 +317,84 @@ class MainWindow(QMainWindow):
             self.setpoint_popup.raise_()
             self.setpoint_popup.activateWindow()
 
+    # === Main data handler ===
     def on_serial_data(self, data_list):
         if len(data_list) != 20:
             return
-        roll, pitch, yaw = data_list[0:3]
-        accx, accy, accz = data_list[3:6]
-        gyrox, gyroy, gyroz = data_list[6:9]
-        battery = data_list[9]
-        temp = data_list[10]
-        lat, lon, alt = data_list[11:14]
+
+        roll, pitch, yaw          = data_list[0:3]
+        accx, accy, accz          = data_list[3:6]
+        gyrox, gyroy, gyroz       = data_list[6:9]
+        battery                   = data_list[9]
+        temp                      = data_list[10]
+        lat, lon, alt             = data_list[11:14]
         roll_sp, pitch_sp, yaw_sp = data_list[14:17]
-        valid_flag = int(data_list[18])
 
+        # deque handles maxlen automatically — no pop(0) needed
         self.data_history.append({
-            "MsgCounter":    int(data_list[17]),
-            "Roll":          roll,
-            "Pitch":         pitch,
-            "Yaw":           yaw,
-            "Roll_SP":       roll_sp,
-            "Pitch_SP":      pitch_sp,
-            "Yaw_SP":        yaw_sp,
-            "AccX":          accx,
-            "AccY":          accy,
-            "AccZ":          accz,
-            "GyroX":         gyrox,
-            "GyroY":         gyroy,
-            "GyroZ":         gyroz,
-            "Battery":       battery,
-            "Temperature":   temp,
-            "Longitude":     lon,
-            "Latitude":      lat,
+            "MsgCounter":  int(data_list[17]),
+            "Roll":        roll,    "Pitch":    pitch,    "Yaw":    yaw,
+            "Roll_SP":     roll_sp, "Pitch_SP": pitch_sp, "Yaw_SP": yaw_sp,
+            "AccX":        accx,    "AccY":     accy,     "AccZ":   accz,
+            "GyroX":       gyrox,   "GyroY":    gyroy,    "GyroZ":  gyroz,
+            "Battery":     battery, "Temperature": temp,
+            "Longitude":   lon,     "Latitude":    lat,
         })
-        if len(self.data_history) > 1000:
-            self.data_history.pop(0)
 
+        # Attitude value labels
         for axis, values in zip(["Roll", "Pitch", "Yaw"],
-                                [(roll, roll_sp, accx, gyrox),
+                                [(roll,  roll_sp,  accx, gyrox),
                                  (pitch, pitch_sp, accy, gyroy),
-                                 (yaw, yaw_sp, accz, gyroz)]):
+                                 (yaw,   yaw_sp,   accz, gyroz)]):
             for (key, (lbl, suffix, decimals)), val in zip(self.value_labels[axis].items(), values):
                 lbl.set_value(val, suffix, decimals)
 
+        # 3D cube
         self.cube_widget.set_attitude(roll, pitch, yaw)
         self.cube_widget.set_setpoint(roll_sp, pitch_sp, yaw_sp)
 
-        self.temp_label.setText(f"Temperature: {temp:5.1f} °C")
-        self.battery_label.setText(f"Battery: {battery:.2f} V")
-        self.status_label.setText(f"Status: {int(data_list[13])}")
-
-        self.battery.setValue(min(100.0, max(0.0, ((battery - 6.0) / (8.40 - 6.0)) * 100.0)))
-
+        # Plots
         self.plots["Roll"].update_plot(roll, roll_sp)
         self.plots["Pitch"].update_plot(pitch, pitch_sp)
         self.plots["Yaw"].update_plot(yaw, yaw_sp)
+
+        # HK labels
+        self.temp_label.setText(f"Temperature: {temp:5.1f} °C")
+        self.battery_label.setText(f"Battery: {battery:.2f} V")
+        self.status_label.setText(f"Status: {int(data_list[13])}")
+        self.battery.setValue(min(100.0, max(0.0, ((battery - 6.0) / (8.40 - 6.0)) * 100.0)))
 
     def save_csv(self):
         folder = "FlightLog"
         os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, "Odyssey_Log.csv")
 
-        # Column order and format spec for each field
-        # (header, dict_key, format_string)
         columns = [
-            ("MsgCounter",      "MsgCounter",  "d"),        # integer
-            ("Roll",            "Roll",        ".2f"),       # x.xx °
-            ("Pitch",           "Pitch",       ".2f"),       # x.xx °
-            ("Yaw",             "Yaw",         ".2f"),       # x.xx °
-            ("Roll_Setpoint",   "Roll_SP",     ".2f"),       # x.xx °
-            ("Pitch_Setpoint",  "Pitch_SP",    ".2f"),       # x.xx °
-            ("Yaw_Setpoint",    "Yaw_SP",      ".2f"),       # x.xx °
-            ("AccX",            "AccX",        ".3f"),       # x.xxx g
-            ("AccY",            "AccY",        ".3f"),       # x.xxx g
-            ("AccZ",            "AccZ",        ".3f"),       # x.xxx g
-            ("GyroX",           "GyroX",       ".2f"),       # x.xx °/s
-            ("GyroY",           "GyroY",       ".2f"),       # x.xx °/s
-            ("GyroZ",           "GyroZ",       ".2f"),       # x.xx °/s
-            ("Battery",         "Battery",     ".2f"),       # x.xx %
-            ("Temperature",     "Temperature", ".1f"),       # x.x °C
-            ("Longitude",       "Longitude",   ".7f"),       # 7 decimal places (32-bit GPS)
-            ("Latitude",        "Latitude",    ".7f"),       # 7 decimal places (32-bit GPS)
+            ("MsgCounter",     "MsgCounter",  "d"),
+            ("Roll",           "Roll",        ".2f"),
+            ("Pitch",          "Pitch",       ".2f"),
+            ("Yaw",            "Yaw",         ".2f"),
+            ("Roll_Setpoint",  "Roll_SP",     ".2f"),
+            ("Pitch_Setpoint", "Pitch_SP",    ".2f"),
+            ("Yaw_Setpoint",   "Yaw_SP",      ".2f"),
+            ("AccX",           "AccX",        ".3f"),
+            ("AccY",           "AccY",        ".3f"),
+            ("AccZ",           "AccZ",        ".3f"),
+            ("GyroX",          "GyroX",       ".2f"),
+            ("GyroY",          "GyroY",       ".2f"),
+            ("GyroZ",          "GyroZ",       ".2f"),
+            ("Battery",        "Battery",     ".2f"),
+            ("Temperature",    "Temperature", ".1f"),
+            ("Longitude",      "Longitude",   ".7f"),
+            ("Latitude",       "Latitude",    ".7f"),
         ]
-
-        headers = [col[0] for col in columns]
 
         try:
             with open(path, "w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(headers)
+                writer.writerow([col[0] for col in columns])
                 for sample in self.data_history:
-                    row = [format(sample[key], fmt) for _, key, fmt in columns]
-                    writer.writerow(row)
+                    writer.writerow([format(sample[key], fmt) for _, key, fmt in columns])
             print(f"[INFO] Saved {len(self.data_history)} samples to {path}")
             self.log_button.setText("Saved!")
             QTimer.singleShot(1000, lambda: self.log_button.setText("Log Data"))

@@ -174,7 +174,7 @@ class _SerialWorker(QThread):
           [22:23] uint16 LE    → CRC-16
         """
         sp_roll_i, sp_pitch_i, sp_yaw_i, batt_i = \
-            struct.unpack_from('<hhhh', packet, 4)      # 4× int16
+            struct.unpack_from('<hhHh', packet, 4)      # roll/pitch: int16, yaw: uint16, batt: int16
         temp_raw = packet[12]                           # uint8
         status   = packet[13]                           # uint8
         lat_i    = struct.unpack_from('<i', packet, 14)[0]  # int32 (scale TBD)
@@ -279,17 +279,17 @@ class SerialReader(QObject):
 
             if 'R' in cmd_dict:
                 val = max(ROLL_MIN,  min(ROLL_MAX,  float(cmd_dict['R'])))
-                self.roll_sp = val
+                # self.roll_sp = val  # setpoint display updated by HK only
                 parts.append(f"r{val:.1f};")
 
             if 'P' in cmd_dict:
                 val = max(PITCH_MIN, min(PITCH_MAX, float(cmd_dict['P'])))
-                self.pitch_sp = val
+                # self.pitch_sp = val  # setpoint display updated by HK only
                 parts.append(f"p{val:.1f};")
 
             if 'Y' in cmd_dict:
                 val = max(YAW_MIN,   min(YAW_MAX,   float(cmd_dict['Y'])))
-                self.yaw_sp = val
+                # self.yaw_sp = val  # setpoint display updated by HK only
                 parts.append(f"y{val:.1f};")
 
             cmd = "".join(parts) + "\n"
@@ -324,7 +324,7 @@ class SerialReader(QObject):
         self._battery  = values[5]
         self._temp     = values[6]
         self._status   = values[7]
-        # Update displayed setpoints with cubesat feedback
+        # Update displayed setpoints with cubesat feedback (from HK packet only)
         self.roll_sp   = values[0]
         self.pitch_sp  = values[1]
         self.yaw_sp    = values[2]
