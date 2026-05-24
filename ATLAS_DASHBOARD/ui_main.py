@@ -10,9 +10,14 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtCore import Qt, QTimer
 
 #
-import os
+import sys, os
 import csv
 from collections import deque
+
+#
+def resource_path(relative_path):
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, relative_path)
 
 #
 from PyQt6.QtWidgets import (
@@ -135,7 +140,7 @@ class MainWindow(QMainWindow):
         # === Top bar ===
         top_box = QHBoxLayout()
         banner = QLabel()
-        pixmap = QPixmap("Figures/AsaBanner.png")
+        pixmap = QPixmap(resource_path("Figures/AsaBanner.png"))
         if not pixmap.isNull():
             banner.setPixmap(pixmap.scaledToHeight(60, Qt.TransformationMode.SmoothTransformation))
         banner.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -272,7 +277,7 @@ class MainWindow(QMainWindow):
         right_layout.addStretch()
 
         # === Cube title and model ===
-        font_id = QFontDatabase.addApplicationFont("Fonts/Orbitron-Bold.ttf")
+        font_id = QFontDatabase.addApplicationFont(resource_path("Fonts/Orbitron-Bold.ttf"))
         font_families = QFontDatabase.applicationFontFamilies(font_id)
         orbitron_font = QFont(font_families[0], 20, QFont.Weight.Bold) if font_families else QFont("Arial", 20, QFont.Weight.Bold)
 

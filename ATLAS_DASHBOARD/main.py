@@ -2,14 +2,18 @@
 #
 #====================================================================================#
 
-import sys
+import sys, os
 from PyQt6.QtWidgets import QApplication
 from ui_main import MainWindow
 from serial_reader import SerialReader
 from PyQt6.QtGui import QIcon
 
+def resource_path(relative_path):
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, relative_path)
+
 app = QApplication(sys.argv)
-app.setWindowIcon(QIcon("Figures/SatteliteIcon.ico"))
+app.setWindowIcon(QIcon(resource_path("Figures/SatteliteIcon.ico")))
 
 # DEBUG: print decoded telemetry packets to console
 DEBUG_TELEMETRY = False
