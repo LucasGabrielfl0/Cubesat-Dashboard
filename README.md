@@ -4,8 +4,7 @@
   Graphical User interface for the ATLAS Ground Station, part of the ODYSSEY CubeSat project
 </p>
 
-FIGURE: PIC OF THE DASHBOARD
-
+[VIDEO OF THE DARSHBOARD]
 
 
 
