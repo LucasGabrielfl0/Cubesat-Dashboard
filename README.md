@@ -1,7 +1,7 @@
 <h1 align="center"> ATLAS-DASHBOARD</h1>
 
 <p align="center">
-  Graphical User interface for the ATLAS GroundStation
+  Graphical User interface for the ATLAS Ground Station, part of the ODYSSEY CubeSat project
 </p>
 
 FIGURE: PIC OF THE DASHBOARD
