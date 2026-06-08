@@ -4,6 +4,19 @@
   Graphical User interface for the ATLAS Ground Station, part of the ODYSSEY CubeSat project
 </p>
 
+<p align="center">
+  <a href="https://github.com/user-attachments/assets/9f3fd871-63c2-410a-97ac-26dfb783a112">
+    <img src="docs/video-thumbnail.png" width="700">
+  </a>
+</p>
+
+
+
+
+## Desc,
+The ODYSSEY is a 2U CubeSat prototype, featuring a full Attitude Determination and Control System (ADCS) in all three axes and a bidirectional telemetry system using LoRa radio.
+This repository contains the embedded firmware running on the STM32F411 microcontroller.
+
 [VIDEO OF THE DARSHBOARD]
 
 
