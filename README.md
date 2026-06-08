@@ -5,6 +5,10 @@
 </p>
 
 <p align="center">
+<img width="1918" height="1078" alt="Dashboard_" src="https://github.com/user-attachments/assets/158072af-f76f-4412-ad8a-b3dc8db03f71" />
+
+
+  
   <a href="https://github.com/user-attachments/assets/9f3fd871-63c2-410a-97ac-26dfb783a112">
     ▶ DASHBOARD Demonstration
   </a>
