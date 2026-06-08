@@ -15,14 +15,8 @@
 </p>
 
 
-
-
-## Desc,
-The ODYSSEY is a 2U CubeSat prototype, featuring a full Attitude Determination and Control System (ADCS) in all three axes and a bidirectional telemetry system using LoRa radio.
-This repository contains the embedded firmware running on the STM32F411 microcontroller.
-
-[VIDEO OF THE DARSHBOARD]
-
+## Overview
+The ATLAS dashboard is a part of the ODYSSEY CubeSat project. It provides real‑time visualization of the CubeSat’s telemetry, including attitude data and system status. It also enables the operator to transmit updated attitude setpoints and mode commands through a clean desktop interface. The dashboard is also capable of exporting the last 1000 received messages as an CSV file for analysis.
 
 
 ## Other Repositories in this Project
