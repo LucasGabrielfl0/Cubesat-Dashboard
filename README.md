@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/user-attachments/assets/9f3fd871-63c2-410a-97ac-26dfb783a112">
-    <img src="docs/video-thumbnail.png" width="700">
+    ▶ DASHBOARD Demonstration
   </a>
 </p>
 
