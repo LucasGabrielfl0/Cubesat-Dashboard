@@ -15,16 +15,15 @@ import csv
 from collections import deque
 
 #
-def resource_path(relative_path):
-    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, relative_path)
-
-#
 from PyQt6.QtWidgets import (
     QWidget, QLabel, QVBoxLayout,
     QHBoxLayout, QMainWindow, QComboBox,
     QFrame, QPushButton, QSizePolicy
 )
+
+def resource_path(relative_path):
+    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, relative_path)
 
 # ===================== DEFINES ===================== #
 DATA_HISTORY_MAX = 1000      # Number of telemetry samples stored in memory / saved to CSV
@@ -107,9 +106,10 @@ class FixedInfoLabel(QLabel):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, serial_reader=None):
+    def __init__(self, serial_reader=None, show_face_markers=True):
         super().__init__()
         self.serial_reader = serial_reader
+        self.show_face_markers = show_face_markers
         self.setWindowTitle("ATLAS-GroundStation")
         self.showFullScreen()
         self.data_history = deque(maxlen=DATA_HISTORY_MAX)
@@ -148,8 +148,9 @@ class MainWindow(QMainWindow):
 
         cfg_box = QHBoxLayout()
         self.port_box = QComboBox()
-        self.port_box.addItems(["COM1", "COM2", "COM3", "COM4", "COM5", "COM6"])
-        self.port_box.setCurrentText("COM6")
+        self.port_box.addItems([f"COM{i}" for i in range(1, 21)])
+        default_port = self.serial_reader.port if self.serial_reader else "COM1"
+        self.port_box.setCurrentText(default_port)
         self.connect_button = QPushButton("Connect")
         self.connect_button.setFixedHeight(28)
         self.connect_button.setFixedWidth(80)
@@ -277,7 +278,7 @@ class MainWindow(QMainWindow):
         right_layout.addStretch()
 
         # === Cube title and model ===
-        font_id = QFontDatabase.addApplicationFont(resource_path("Fonts/Orbitron-Bold.ttf"))
+        font_id = QFontDatabase.addApplicationFont("Fonts/Orbitron-Bold.ttf")
         font_families = QFontDatabase.applicationFontFamilies(font_id)
         orbitron_font = QFont(font_families[0], 20, QFont.Weight.Bold) if font_families else QFont("Arial", 20, QFont.Weight.Bold)
 
@@ -292,7 +293,7 @@ class MainWindow(QMainWindow):
         frame_layout.addWidget(cube_title_label)
         right_layout.addWidget(cube_title_frame)
 
-        self.cube_widget = CubeWidget3D()
+        self.cube_widget = CubeWidget3D(show_face_markers=self.show_face_markers)
         self.cube_widget.setMinimumHeight(250)
         right_layout.addWidget(self.cube_widget, stretch=2)
 
@@ -305,8 +306,6 @@ class MainWindow(QMainWindow):
         baudrate = 250000
         if self.serial_reader:
             self.serial_reader.reconnect(port, baudrate)
-            self.connect_button.setText("Connected!")
-            QTimer.singleShot(1500, lambda: self.connect_button.setText("Connect"))
 
     def closeEvent(self, event):
         if self.serial_reader:

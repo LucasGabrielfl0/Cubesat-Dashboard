@@ -134,7 +134,17 @@ class _SerialWorker(QThread):
                     del buffer[:packet_size]
 
             except Exception as e:
-                print(f"[ERROR] Reading serial: {e}")
+                err_str = str(e)
+                if "PermissionError" in err_str or "Acesso negado" in err_str:
+                    print(f"[WARN] Port lost — device disconnected? Stopping serial reader.")
+                    self._running = False
+                    try:
+                        if self.ser and self.ser.is_open:
+                            self.ser.close()
+                    except Exception:
+                        pass
+                else:
+                    print(f"[ERROR] Reading serial: {e}")
 
     # --------------------------------------------------
     def _decode_telemetry(self, packet: bytes):
@@ -238,6 +248,10 @@ class SerialReader(QObject):
         self._worker.telemetry_received.connect(self._on_telemetry)
         self._worker.housekeeping_received.connect(self._on_housekeeping)
 
+    @property
+    def is_connected(self):
+        return self._worker.ser is not None and self._worker.ser.is_open
+
     def start(self):
         self._worker.start()
 
@@ -247,6 +261,12 @@ class SerialReader(QObject):
     def reconnect(self, port: str, baudrate: int):
         print(f"[INFO] Reconnecting → {port} @ {baudrate}")
         self._worker.stop()
+        self._worker.wait()  # ensure thread is fully stopped before reopening
+        if self._worker.ser and self._worker.ser.is_open:
+            try:
+                self._worker.ser.close()
+            except Exception:
+                pass
         self.port     = port
         self.baudrate = baudrate
         self._worker  = _SerialWorker(port, baudrate)
